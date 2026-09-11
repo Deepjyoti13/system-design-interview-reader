@@ -1,0 +1,7 @@
+# The chapter files are copyrighted book content and are deliberately NOT tracked.
+# Only the reader shell (index.html) lives in this repo.
+*.html
+!index.html
+
+.DS_Store
+Thumbs.db
