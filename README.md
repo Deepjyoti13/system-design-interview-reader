@@ -6,32 +6,42 @@ persistent table of contents, search, progress tracking, and keyboard navigation
 
 **[▶ Open the live reader](https://deepjyoti13.github.io/system-design-interview-reader/)**
 
-> **No book content is included in this repository.** The chapters are a paid commercial
-> product by [ByteByteGo](https://bytebytego.com) (Alex Xu) and are not mine to redistribute.
-> This repo contains only `index.html` — the reader — which is why the live demo shows the
-> interface with every chapter link broken. To actually read anything, point it at your own
-> legally obtained copies (see below).
+> **No book content is in this repository.** The chapters are a paid commercial product by
+> [ByteByteGo](https://bytebytego.com) (Alex Xu) and are not mine to redistribute. What is
+> published here is the reader and its build tooling — which is why the live demo shows the
+> interface with every chapter link broken. Point it at your own legally obtained copies to
+> actually read anything.
 
 ## What it does
 
 - **Library home** — every chapter as a card, grouped into Start Here / Foundations /
   Volume 1 / Volume 2 / Wrap Up.
-- **Reader** — the chapter renders in-frame beside a table of contents that never scrolls away.
+- **Reader** — the chapter renders beside a table of contents that never scrolls away.
 - **Search** — filter by title, chapter number, or section. `/` focuses the box, `Enter` opens
   the first match.
 - **Progress** — mark chapters read; the count, the bar, and the card states persist in
   `localStorage`.
 - **Resume** — the primary button remembers the last chapter you opened.
 - **Keyboard** — `←` / `→` between chapters, `Esc` back to the library, `/` to search.
-- **Deep links** — `index.html#ch=14` opens chapter 14 directly.
+- **Deep links** — `#ch=14` opens chapter 14 directly.
 - Light and dark themes (follows the OS by default), responsive down to phone width.
 
-No build step, no dependencies, no network calls. One HTML file.
+No build step, no dependencies, no network calls.
 
-## Using it with your own copy
+## Layout
 
-Put `index.html` in the same folder as your chapter files and open it in a browser. The reader
-resolves each chapter by filename, so the names have to match exactly:
+```
+docs/index.html     the reader — this is what GitHub Pages serves
+tools/build.py      bundles your chapter files into one self-contained HTML file
+tools/template.html the shell that build.py fills in
+```
+
+## Two ways to use it
+
+### 1. Reader beside your chapter files
+
+Drop `docs/index.html` into the folder holding your chapters and open it. It resolves each
+chapter by filename, so the names have to match exactly:
 
 ```
 0. Foreword.html
@@ -67,18 +77,36 @@ resolves each chapter by filename, so the names have to match exactly:
 30. The Learning Continues.html
 ```
 
-If a chapter fails to load, the reader says so and offers to open the file directly. Two
-things cause that: the file isn't in the folder, or the browser is refusing to embed one local
-file inside another. Chrome and Firefox handle local embedding fine; Safari is stricter — use
-the *New tab* button there, or serve the folder over HTTP:
+Safari refuses to embed one local file inside another; use the *New tab* button there, or
+serve the folder over HTTP:
 
 ```sh
 python3 -m http.server 8000   # then visit http://localhost:8000
 ```
 
+### 2. One self-contained file
+
+`tools/build.py` folds every chapter into a single HTML file that works offline with no
+sibling files at all. Put `tools/` next to your chapters and run:
+
+```sh
+python3 tools/build.py
+```
+
+It writes `index.html` in the parent directory. The output is far smaller than the sum of its
+inputs: each saved chapter page carries its own copy of the same ~3 MB stylesheet, so the 24
+unique style blocks are stored once, and base64 images are deduplicated into a shared table.
+In practice 129 MB of chapter files becomes a ~31 MB bundle, most of which is image data.
+
+Chapters are parsed on demand rather than up front, so startup stays instant. Each one renders
+into a shadow root with the original stylesheets attached via `adoptedStyleSheets`, which keeps
+the book's CSS from leaking into the reader's own interface — and strips the duplicated site
+header and sidebar that each saved page carries.
+
 ## Adapting it to another book
 
-The chapter list is one array near the top of the `<script>` block:
+The chapter list is one array near the top of the `<script>` block in `docs/index.html` (and
+mirrored in `tools/build.py`):
 
 ```js
 var CHAPTERS = [
@@ -92,5 +120,5 @@ var CHAPTERS = [
 
 ## License
 
-Reader code: [MIT](LICENSE). The book it is designed to display is not covered by that license
-and is not distributed here.
+Reader and tooling: [MIT](LICENSE). The book they are designed to display is not covered by
+that license and is not distributed here.

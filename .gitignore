@@ -1,7 +1,8 @@
-# The chapter files are copyrighted book content and are deliberately NOT tracked.
-# Only the reader shell (index.html) lives in this repo.
+# Chapter files and the generated bundle are copyrighted book content.
+# Only the reader shell (docs/index.html) and the build tooling are tracked.
 *.html
-!index.html
+!docs/index.html
+!tools/template.html
 
 .DS_Store
 Thumbs.db

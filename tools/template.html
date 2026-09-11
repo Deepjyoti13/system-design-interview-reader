@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System Design Interview</title>
+<style>
+/*SHELL_CSS*/
+</style>
+</head>
+<body>
+
+<header>
+  <button class="iconbtn" id="menuBtn" title="Chapters" aria-label="Toggle chapter list">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+  <button class="brand" id="homeBtn" title="Library home">
+    <span class="mark">SD</span>
+    <b>System Design Interview</b>
+    <span>· 31 chapters</span>
+  </button>
+  <div class="spacer"></div>
+  <div class="searchwrap">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="search" type="search" placeholder="Search chapters…" autocomplete="off" spellcheck="false">
+    <span class="kbd">/</span>
+  </div>
+  <button class="iconbtn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme"></button>
+</header>
+
+<div class="shell">
+  <aside>
+    <div class="progress">
+      <div class="row"><b>Progress</b><span id="progressText">0 / 31</span></div>
+      <div class="bar"><i id="progressBar"></i></div>
+    </div>
+    <nav id="nav"></nav>
+  </aside>
+
+  <main>
+    <section class="home" id="home">
+      <div class="hero">
+        <h1>The whole book, one file.</h1>
+        <p>Every chapter of <em>System Design Interview</em> — Volumes 1 &amp; 2 — embedded directly in this page. Nothing to fetch, nothing to install, works offline. Pick up where you left off and move between chapters with the arrow keys.</p>
+        <div class="actions">
+          <button class="btn" id="resumeBtn">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            <span id="resumeLabel">Start reading</span>
+          </button>
+          <button class="btn ghost" id="randomBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+            Surprise me
+          </button>
+        </div>
+      </div>
+      <div class="sec" id="cards"></div>
+    </section>
+
+    <section class="reader" id="reader" hidden>
+      <div class="toolbar">
+        <div class="grp2">
+          <button class="iconbtn" id="prevBtn" title="Previous chapter (←)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <button class="iconbtn" id="nextBtn" title="Next chapter (→)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </div>
+        <div class="now">
+          <div class="k" id="nowNum"></div>
+          <div class="t" id="nowTitle"></div>
+        </div>
+        <div class="grp2">
+          <button class="iconbtn" id="readBtn" title="Mark as read">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            <span class="lbl" id="readLbl">Mark read</span>
+          </button>
+        </div>
+      </div>
+      <div class="stage">
+        <div id="doc"></div>
+        <div class="loading" id="loading"><span><span class="spin"></span>Rendering chapter…</span></div>
+        <button class="toTop" id="toTop" title="Back to top">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 15 7-7 7 7"/></svg>
+        </button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<!--PAYLOAD-->
+<script>
+(function () {
+  "use strict";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var json = function (id) {
+    var el = $(id);
+    return el ? JSON.parse(el.textContent) : null;
+  };
+
+  var CHAPTERS = json("meta");
+  var nav = $("nav"), cards = $("cards"), home = $("home"), reader = $("reader");
+  var current = null;
+
+  /* payloads are parsed on demand so boot stays instant */
+  var blobs = null, sheets = {}, artCache = {};
+  function getBlobs() {
+    if (blobs === null) blobs = json("blobs");
+    return blobs;
+  }
+  function getArticle(n) {
+    if (!artCache[n]) {
+      var html = json("art" + n);
+      var table = getBlobs();
+      artCache[n] = html.replace(/@@B(\d+)@@/g, function (m, i) { return table[+i] || ""; });
+    }
+    return artCache[n];
+  }
+
+  var supportsAdopted = (function () {
+    try { return !!(document.adoptedStyleSheets && new CSSStyleSheet()); }
+    catch (e) { return false; }
+  })();
+
+  var BASE_CSS =
+    ":host{display:block;background:#fff;color:#1f2328;" +
+    "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;}" +
+    "img{max-width:100%;height:auto}" +
+    ".sdi-wrap{max-width:980px;margin:0 auto;padding:34px 28px 90px}" +
+    "@media(max-width:640px){.sdi-wrap{padding:20px 15px 70px}}";
+
+  function getSheet(i) {
+    if (!sheets[i]) {
+      var css = json("css" + i);
+      if (css === null) return null;
+      if (supportsAdopted) {
+        var sh = new CSSStyleSheet();
+        try { sh.replaceSync(css); } catch (e) { return null; }
+        sheets[i] = sh;
+      } else {
+        sheets[i] = css;
+      }
+    }
+    return sheets[i];
+  }
+
+  var root = $("doc").attachShadow({ mode: "open" });
+  var baseSheet = null;
+  if (supportsAdopted) { baseSheet = new CSSStyleSheet(); baseSheet.replaceSync(BASE_CSS); }
+
+  function paint(c) {
+    var list = [], i;
+    for (i = 0; i < c.css.length; i++) {
+      var s = getSheet(c.css[i]);
+      if (s) list.push(s);
+    }
+    var body = '<div class="sdi-wrap">' + getArticle(c.n) + "</div>";
+
+    if (supportsAdopted) {
+      root.adoptedStyleSheets = [baseSheet].concat(list);
+      root.innerHTML = body;
+    } else {
+      var css = "<style>" + BASE_CSS + "</style>";
+      for (i = 0; i < list.length; i++) css += "<style>" + list[i] + "</style>";
+      root.innerHTML = css + body;
+    }
+
+    /* chapter links point at the live site — never navigate this page away */
+    var links = root.querySelectorAll("a[href]");
+    for (i = 0; i < links.length; i++) {
+      var href = links[i].getAttribute("href") || "";
+      if (href.charAt(0) !== "#") {
+        links[i].setAttribute("target", "_blank");
+        links[i].setAttribute("rel", "noopener noreferrer");
+      }
+    }
+    $("doc").scrollTop = 0;
+  }
+
+  var TICK = '<svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
+  /* ---------- storage ---------- */
+  function get(k, fb) {
+    try { var v = localStorage.getItem("sdi." + k); return v === null ? fb : JSON.parse(v); }
+    catch (e) { return fb; }
+  }
+  function set(k, v) { try { localStorage.setItem("sdi." + k, JSON.stringify(v)); } catch (e) {} }
+
+  var read = get("read", []);
+  if (!Array.isArray(read)) read = [];
+  var isRead = function (n) { return read.indexOf(n) !== -1; };
+
+  /* ---------- theme ---------- */
+  var SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.5 1.5M17.6 17.6l1.5 1.5M19.1 4.9l-1.5 1.5M6.4 17.6l-1.5 1.5"/></svg>';
+  var MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>';
+  function applyTheme(mode) {
+    document.documentElement.setAttribute("data-theme", mode);
+    $("themeBtn").innerHTML = mode === "dark" ? SUN : MOON;
+  }
+  var savedTheme = get("theme", null);
+  applyTheme(savedTheme || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+  $("themeBtn").onclick = function () {
+    var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    applyTheme(next); set("theme", next);
+  };
+
+  /* ---------- render lists ---------- */
+  function render(filter) {
+    var q = (filter || "").trim().toLowerCase();
+    var list = CHAPTERS.filter(function (c) {
+      return !q || c.t.toLowerCase().indexOf(q) !== -1 || String(c.n) === q || c.g.toLowerCase().indexOf(q) !== -1;
+    });
+
+    var navHtml = [], cardHtml = [], grp = null;
+    list.forEach(function (c) {
+      if (c.g !== grp) {
+        if (grp !== null) cardHtml.push("</div>");
+        grp = c.g;
+        navHtml.push('<div class="grp">' + grp + "</div>");
+        cardHtml.push("<h2>" + grp + '</h2><div class="cards">');
+      }
+      var cls = (isRead(c.n) ? " read" : "") + (current === c.n ? " active" : "");
+      navHtml.push(
+        '<a class="item' + cls + '" data-n="' + c.n + '" href="#ch=' + c.n + '">' +
+          '<span class="n">' + c.n + "</span>" +
+          '<span class="t">' + c.t + "</span>" + TICK +
+        "</a>"
+      );
+      cardHtml.push(
+        '<a class="card' + (isRead(c.n) ? " read" : "") + '" data-n="' + c.n + '" href="#ch=' + c.n + '">' +
+          TICK + '<div class="n">Chapter ' + c.n + "</div><h3>" + c.t + "</h3></a>"
+      );
+    });
+    if (grp !== null) cardHtml.push("</div>");
+
+    nav.innerHTML = navHtml.length ? navHtml.join("") : '<div class="empty">No chapter matches that.</div>';
+    cards.innerHTML = cardHtml.length ? cardHtml.join("") : "<h2>Nothing found</h2>";
+  }
+
+  function updateProgress() {
+    var pct = Math.round((read.length / CHAPTERS.length) * 100);
+    $("progressBar").style.width = pct + "%";
+    $("progressText").textContent = read.length + " / " + CHAPTERS.length + "  ·  " + pct + "%";
+  }
+  function chapter(n) { return CHAPTERS.filter(function (c) { return c.n === n; })[0]; }
+  function updateResume() {
+    var c = chapter(get("last", null));
+    $("resumeLabel").textContent = c ? "Resume — " + c.n + ". " + c.t : "Start reading";
+  }
+
+  /* ---------- open ---------- */
+  function open(n, pushHash) {
+    var c = chapter(n);
+    if (!c) return;
+    current = n;
+    set("last", n);
+
+    home.hidden = true;
+    reader.hidden = false;
+    $("nowNum").textContent = "Chapter " + c.n;
+    $("nowTitle").textContent = c.t;
+    $("prevBtn").disabled = n === CHAPTERS[0].n;
+    $("nextBtn").disabled = n === CHAPTERS[CHAPTERS.length - 1].n;
+    syncReadBtn();
+
+    $("loading").classList.add("show");
+    if (pushHash !== false) location.hash = "ch=" + n;
+    document.body.classList.remove("nav-open");
+    render($("search").value);
+    updateResume();
+    var active = nav.querySelector(".item.active");
+    if (active && active.scrollIntoView) active.scrollIntoView({ block: "nearest" });
+
+    /* let the spinner paint before the heavy work */
+    setTimeout(function () {
+      try { paint(c); }
+      catch (e) {
+        root.innerHTML = '<div style="padding:40px;font:14px system-ui;color:#b00">' +
+          "This chapter could not be rendered: " + String(e && e.message || e) + "</div>";
+      }
+      $("loading").classList.remove("show");
+      $("toTop").classList.remove("show");
+    }, 16);
+  }
+
+  function goHome() {
+    current = null;
+    reader.hidden = true;
+    home.hidden = false;
+    root.innerHTML = "";
+    if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+    render($("search").value);
+  }
+
+  function step(d) {
+    var i = CHAPTERS.findIndex(function (c) { return c.n === current; });
+    var next = CHAPTERS[i + d];
+    if (next) open(next.n);
+  }
+
+  /* ---------- read state ---------- */
+  function syncReadBtn() {
+    var on = isRead(current);
+    $("readBtn").classList.toggle("on", on);
+    $("readLbl").textContent = on ? "Read" : "Mark read";
+  }
+  $("readBtn").onclick = function () {
+    if (current === null) return;
+    var i = read.indexOf(current);
+    if (i === -1) read.push(current); else read.splice(i, 1);
+    set("read", read);
+    syncReadBtn(); updateProgress(); render($("search").value);
+  };
+
+  /* ---------- wiring ---------- */
+  function delegate(el) {
+    el.addEventListener("click", function (e) {
+      var a = e.target.closest("[data-n]");
+      if (!a) return;
+      e.preventDefault();
+      open(Number(a.getAttribute("data-n")));
+    });
+  }
+  delegate(nav); delegate(cards);
+
+  $("homeBtn").onclick = goHome;
+  $("prevBtn").onclick = function () { step(-1); };
+  $("nextBtn").onclick = function () { step(1); };
+  $("menuBtn").onclick = function () { document.body.classList.toggle("nav-open"); };
+  $("scrim").onclick = function () { document.body.classList.remove("nav-open"); };
+  $("resumeBtn").onclick = function () {
+    var last = get("last", null);
+    open(chapter(last) ? last : CHAPTERS[0].n);
+  };
+  $("randomBtn").onclick = function () {
+    var pool = CHAPTERS.filter(function (c) { return c.n >= 5 && c.n <= 29; });
+    open(pool[Math.floor(Math.random() * pool.length)].n);
+  };
+  $("toTop").onclick = function () { $("doc").scrollTo({ top: 0, behavior: "smooth" }); };
+  $("doc").addEventListener("scroll", function () {
+    $("toTop").classList.toggle("show", $("doc").scrollTop > 700);
+  });
+
+  $("search").addEventListener("input", function () { render(this.value); });
+  $("search").addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { this.value = ""; render(""); this.blur(); }
+    if (e.key === "Enter") {
+      var first = nav.querySelector(".item");
+      if (first) open(Number(first.getAttribute("data-n")));
+    }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+    if (e.key === "/" && !typing) { e.preventDefault(); $("search").focus(); return; }
+    if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "ArrowLeft" && current !== null) step(-1);
+    else if (e.key === "ArrowRight" && current !== null) step(1);
+    else if (e.key === "Escape") {
+      if (document.body.classList.contains("nav-open")) document.body.classList.remove("nav-open");
+      else if (current !== null) goHome();
+    }
+  });
+
+  window.addEventListener("hashchange", function () {
+    var m = /ch=(\d+)/.exec(location.hash);
+    if (m) { var n = Number(m[1]); if (n !== current) open(n, false); }
+    else goHome();
+  });
+
+  /* ---------- boot ---------- */
+  render("");
+  updateProgress();
+  updateResume();
+  var m = /ch=(\d+)/.exec(location.hash);
+  if (m) open(Number(m[1]), false);
+})();
+</script>
+</body>
+</html>
