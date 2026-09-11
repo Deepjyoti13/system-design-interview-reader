@@ -119,6 +119,13 @@
   .hero{max-width:820px;margin:0 auto 30px}
   .hero h1{font-size:clamp(26px,4vw,36px);line-height:1.12;letter-spacing:-.025em;margin:0 0 10px;font-weight:680}
   .hero p{margin:0;color:var(--ink-2);font-size:15px;max-width:60ch}
+  .banner{
+    margin:18px 0 0;padding:13px 15px;border-radius:var(--radius);
+    background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 32%, transparent);
+  }
+  .banner b{display:block;font-size:13.5px;margin-bottom:4px}
+  .banner p{margin:0;font-size:13px;color:var(--ink-2);max-width:none}
+  .banner a{color:var(--accent)}
   .hero .actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}
   .btn{
     height:38px;padding:0 15px;border-radius:10px;border:1px solid transparent;background:var(--accent);color:#fff;
@@ -233,6 +240,13 @@
       <div class="hero">
         <h1>The whole book, one page.</h1>
         <p>Every chapter of <em>System Design Interview</em> — Volumes 1 &amp; 2 — indexed and readable without leaving this tab. Pick up where you left off, mark chapters as read, and jump between them with the arrow keys.</p>
+        <div class="banner" id="hostedBanner" hidden>
+          <b>You&rsquo;re on the hosted demo, so the chapters are missing.</b>
+          <p>This site publishes the reader only &mdash; the chapter files are a paid book
+          (<a href="https://bytebytego.com" target="_blank" rel="noopener">ByteByteGo</a>) and aren&rsquo;t mine to
+          redistribute, so every chapter below will 404 here. To actually read: save
+          <a href="index.html" download>index.html</a> into the folder holding your own copies and open it from there.</p>
+        </div>
         <div class="actions">
           <button class="btn" id="resumeBtn">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -464,9 +478,20 @@
     if (next) open(next.n);
   }
 
+  function frameIsError() {
+    // Same-origin only (hosted). Throws on file:// — caller treats that as "unknown".
+    var d = frame.contentDocument;
+    if (!d) return false;
+    var probe = (d.title || "") + " " + (d.body ? d.body.textContent.slice(0, 300) : "");
+    return /File not found|Site not found|404|Page not found/i.test(probe);
+  }
+
   frame.addEventListener("load", function () {
     clearTimeout(loadTimer);
-    notice.classList.remove("show");
+    var bad = false;
+    try { bad = frameIsError(); } catch (e) { bad = false; }
+    if (bad && !noticeDismissed) notice.classList.add("show");
+    else notice.classList.remove("show");
   });
 
   /* ---------- read state ---------- */
@@ -534,6 +559,11 @@
   });
 
   /* ---------- boot ---------- */
+  if (location.protocol === "http:" || location.protocol === "https:") {
+    if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
+      $("hostedBanner").hidden = false;
+    }
+  }
   render("");
   updateProgress();
   updateResume();
